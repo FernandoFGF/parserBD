@@ -1,0 +1,14 @@
+# Data
+checked/
+input/
+output/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pkl
+
+# OS
+Thumbs.db
+.DS_Store
