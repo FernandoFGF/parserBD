@@ -5,9 +5,71 @@ import sys
 import pandas as pd
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from config import VENDOR
+from config import VENDOR, VENDOR_DELIVERY_ID, VENDOR_BOX_NUMBER
 
 CHECKED_BOXES_DIR = r"C:\Users\Ferna\Desktop\database\checked_boxes"
+
+DEST_TO_UPLOAD_FOLDER = {
+    "CIEMAT": "Box_subidas_CIEMAT",
+    "INFN": "Box_subidas_Italia",
+}
+
+
+def _get_destination():
+    parts = str(VENDOR_DELIVERY_ID).split("_")
+    if len(parts) >= 3:
+        return parts[1].upper()
+    return None
+
+
+def _get_expected_vendor_folder():
+    dest = _get_destination()
+    if dest:
+        return f"HPK_{dest}"
+    return None
+
+
+def _get_expected_box_suffix():
+    return f"Box{str(VENDOR_BOX_NUMBER).zfill(2)}"
+
+
+def _filter_by_config(matches):
+    vendor = _get_expected_vendor_folder()
+    box_suffix = _get_expected_box_suffix()
+    if not vendor or not box_suffix:
+        return None
+    filtered = []
+    for m in matches:
+        parts = m.replace("\\", "/").split("/")
+        for p in parts:
+            if p.startswith("Box") and p.endswith("_checked"):
+                if p == f"{box_suffix}_checked":
+                    filtered.append(m)
+                    break
+    if len(filtered) == 1:
+        return filtered[0]
+    vendor_filtered = [m for m in filtered if vendor in m]
+    if len(vendor_filtered) == 1:
+        return vendor_filtered[0]
+    return None
+
+
+def _filter_upload_by_config(matches):
+    dest = _get_destination()
+    box_suffix = _get_expected_box_suffix()
+    upload_vendor = DEST_TO_UPLOAD_FOLDER.get(dest) if dest else None
+    if not upload_vendor or not box_suffix:
+        return None
+    filtered = []
+    for m in matches:
+        parts = m.replace("\\", "/").split("/")
+        has_vendor = upload_vendor in parts
+        has_box = f"{box_suffix}-upload" in parts
+        if has_vendor and has_box:
+            filtered.append(m)
+    if len(filtered) == 1:
+        return filtered[0]
+    return None
 
 FILES = [
     "SiPM-item-manifest.xlsx",
@@ -48,6 +110,11 @@ def find_upload_source(tray_path):
         return None
     if len(matches) == 1:
         return matches[0]
+    auto = _filter_upload_by_config(matches)
+    if auto:
+        print(f"  Auto-selected by config (dest={_get_destination()}, box={VENDOR_BOX_NUMBER}):")
+        print(f"    {auto}")
+        return auto
     print(f"  Found {len(matches)} matches for {upload_name}:")
     for i, m in enumerate(matches):
         print(f"    [{i + 1}] {m}")
@@ -199,6 +266,11 @@ def resolve_tray(tray_input):
         return None
     if len(matches) == 1:
         return matches[0]
+    auto = _filter_by_config(matches)
+    if auto:
+        print(f"Auto-selected by config (dest={_get_destination()}, box={VENDOR_BOX_NUMBER}):")
+        print(f"  {auto}")
+        return auto
     print(f"Found {len(matches)} matches for '{tray_input}':")
     for i, m in enumerate(matches):
         print(f"  [{i + 1}] {m}")
