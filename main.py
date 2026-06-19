@@ -77,12 +77,15 @@ def copy_to_remote(local_path, vendor_folder):
         return False
 
 
-def update_summary(script_dir, box, vendor_folder, tray_results):
+def update_summary(script_dir, box, vendor_folder, tray_results, tray_comments=None):
     """Create or update checked/summary.xlsx with Detalle sheet.
 
     Preserves all existing columns (e.g. manual Comments) and formatting.
     Only updates Status for the processed trays and appends new rows.
+    Optionally writes Comments for specific trays via tray_comments dict.
     """
+    if tray_comments is None:
+        tray_comments = {}
     from openpyxl import load_workbook, Workbook
     from openpyxl.styles import PatternFill, Font, Alignment
     from openpyxl.utils import get_column_letter
@@ -95,7 +98,6 @@ def update_summary(script_dir, box, vendor_folder, tray_results):
         "warning": PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"),
         "error":   PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
         "upload":  PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid"),
-        "ruben":   PatternFill(start_color="F4B4C2", end_color="F4B4C2", fill_type="solid"),
     }
     header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
@@ -126,7 +128,7 @@ def update_summary(script_dir, box, vendor_folder, tray_results):
         all_cols[ws.cell(row=1, column=c_idx).value] = c_idx
 
     # Ensure standard headers exist
-    standard = ["Vendor", "Box", "Tray", "Status"]
+    standard = ["Vendor", "Box", "Tray", "Status", "Comments"]
     for h in standard:
         if h not in all_cols:
             c_idx = ws.max_column + 1
@@ -162,15 +164,20 @@ def update_summary(script_dir, box, vendor_folder, tray_results):
 
     for key, status in new_tray_data.items():
         vendor, box_num_t, tray_short = key
+        comment = tray_comments.get(key, None)
         if key in existing_keys:
             # Update Status (unless "upload")
             for rd in rows:
                 if (rd.get("Vendor"), rd.get("Box"), rd.get("Tray")) == key:
                     if rd.get("Status") != "upload":
                         rd["Status"] = status
+                    if comment is not None:
+                        rd["Comments"] = comment
                     break
         else:
             new_row = {"Vendor": vendor, "Box": box_num_t, "Tray": tray_short, "Status": status}
+            if comment is not None:
+                new_row["Comments"] = comment
             for h in all_cols:
                 if h not in new_row:
                     new_row[h] = None
@@ -511,23 +518,37 @@ def process_box():
         print(f" No trays exported. Log saved to: output/global_validation_log.txt")
 
     # --- STEP 9.5: Auto-apply upload fix to trays with missing-row errors ---
+    tray_comments = {}
     if upload_fix_trays and total_trays > 0:
         print(f"\n Auto-applying upload fix to {len(upload_fix_trays)} error tray(s)...")
-        for tray in sorted(upload_fix_trays):
-            tray_checked_name = f"{tray}_checked"
-            tray_path = os.path.join(dest_path, tray_checked_name)
-            source = hpkupload.find_upload_source(tray_path)
-            if source:
-                hpkupload.replace_with_upload(tray_path, source)
-                hpkupload.apply_hpk_prefix(tray_path)
-                print(f"  [OK] {tray_checked_name}: replaced from checked_boxes + HPK prefix applied")
-                tray_results[tray] = "ruben"
-            else:
-                print(f"  [SKIP] {tray_checked_name}: no upload source found in checked_boxes")
+        upload_log_path = os.path.join(dest_path, "upload_fix_log.txt")
+        with open(upload_log_path, "w", encoding="utf-8") as ulf:
+            ulf.write(f"=== UPLOAD FIX LOG for {box} ===\n\n")
+            for tray in sorted(upload_fix_trays):
+                tray_checked_name = f"{tray}_checked"
+                tray_path = os.path.join(dest_path, tray_checked_name)
+                source = hpkupload.find_upload_source(tray_path)
+                if source:
+                    hpkupload.replace_with_upload(tray_path, source)
+                    hpkupload.apply_hpk_prefix(tray_path)
+                    msg = f"Replaced from checked_boxes: {source}"
+                    print(f"  [OK] {tray_checked_name}: {msg}")
+                    ulf.write(f"  {tray_checked_name}: {msg}\n")
+                    tray_results[tray] = "warning"
+                    tray_short = int(tray.replace("Tray", "").lstrip("0") or "0")
+                    tray_comments[(vendor_folder, int(box[3:]), tray_short)] = "ruben"
+                else:
+                    msg = "no upload source found in checked_boxes"
+                    print(f"  [SKIP] {tray_checked_name}: {msg}")
+                    ulf.write(f"  {tray_checked_name}: {msg}\n")
+        with open(os.path.join(dest_path, "global_validation_log.txt"), "a", encoding="utf-8") as gl:
+            gl.write(f"\n=== UPLOAD FIX LOG ===\n")
+            with open(upload_log_path, "r", encoding="utf-8") as ulf2:
+                gl.write(ulf2.read())
 
     # --- STEP 10: Update summary.xlsx ---
     remote_ok = copy_to_remote(dest_path, vendor_folder) if total_trays > 0 else False
-    summary_path = update_summary(script_dir, box, vendor_folder, tray_results)
+    summary_path = update_summary(script_dir, box, vendor_folder, tray_results, tray_comments)
     print(f" Summary: checked/summary.xlsx")
 
     # --- STEP 11: Sync summary.xlsx to remote ---
