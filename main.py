@@ -40,13 +40,23 @@ def copy_to_remote(local_path, vendor_folder):
         folder_name = os.path.basename(local_path)
         zip_path = local_path + ".zip"
 
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
-            for root, dirs, files in os.walk(local_path):
-                for file in files:
-                    file_path = os.path.join(root, file)
-                    arcname = os.path.relpath(file_path, local_path)
-                    zf.write(file_path, arcname)
+        file_list = []
+        for root, dirs, files in os.walk(local_path):
+            for file in files:
+                file_list.append(os.path.join(root, file))
 
+        total = len(file_list)
+        print(f"\n   Zipping {total} files from {folder_name}...")
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+            for i, file_path in enumerate(file_list):
+                arcname = os.path.relpath(file_path, local_path)
+                zf.write(file_path, arcname)
+                if (i + 1) % 500 == 0 or (i + 1) == total:
+                    print(f"   Zip: {i + 1}/{total} files")
+        zip_size_mb = os.path.getsize(zip_path) / (1024 * 1024)
+        print(f"   Zip done: {zip_size_mb:.1f} MB")
+
+        print(f"   Connecting to {SSH_REMOTE_HOST}...")
         transport = paramiko.Transport((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
         transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD, timeout=30)
         sftp = paramiko.SFTPClient.from_transport(transport)
@@ -64,13 +74,14 @@ def copy_to_remote(local_path, vendor_folder):
         except FileNotFoundError:
             pass
 
+        print(f"   Uploading {folder_name}.zip ({zip_size_mb:.1f} MB)...")
         sftp.put(zip_path, remote_zip)
         sftp.close()
         transport.close()
 
         os.remove(zip_path)
 
-        print(f" Remote copy: {folder_name}.zip -> {SSH_REMOTE_HOST}:{remote_zip}")
+        print(f"   Remote copy: {folder_name}.zip -> {SSH_REMOTE_HOST}:{remote_zip}")
         return True
     except Exception as e:
         print(f" Remote copy FAILED: {e}")
