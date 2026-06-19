@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 import sys
 import pandas as pd
 
@@ -103,37 +104,53 @@ def apply_hpk_prefix(tray_path):
     return modified_any
 
 
-if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        tray_input = sys.argv[1].strip()
-    else:
-        tray_input = input("Enter tray number (e.g. 5, 12, Tray000012): ").strip()
-    if not tray_input:
-        print("No tray specified.")
-        sys.exit(1)
-
-    matches = find_tray_path(tray_input)
-    if not matches:
-        print(f"Tray '{tray_input}' not found in checked/ directory.")
-        sys.exit(1)
-
-    if len(matches) > 1:
-        print(f"Found {len(matches)} matches:")
-        for i, m in enumerate(matches):
-            print(f"  [{i + 1}] {m}")
-        choice = input("Select one (number): ").strip()
-        try:
-            idx = int(choice) - 1
-            tray_path = matches[idx]
-        except (ValueError, IndexError):
-            print("Invalid selection.")
-            sys.exit(1)
-    else:
-        tray_path = matches[0]
-
+def process_tray(tray_path):
     print(f"\nProcessing: {tray_path}")
     ok = apply_hpk_prefix(tray_path)
     if ok:
         print("Done: HPK prefixes applied.")
     else:
         print("No changes needed (IDs already have HPK prefix or vendor is not HPK).")
+
+    tray_name = os.path.basename(tray_path)
+    tray_parent = os.path.dirname(tray_path)
+    zip_base = os.path.join(tray_parent, tray_name)
+    zip_path = shutil.make_archive(zip_base, "zip", tray_path)
+    print(f"Zipped: {zip_path}")
+
+
+def resolve_tray(tray_input):
+    matches = find_tray_path(tray_input)
+    if not matches:
+        print(f"Tray '{tray_input}' not found in checked/ directory.")
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    print(f"Found {len(matches)} matches for '{tray_input}':")
+    for i, m in enumerate(matches):
+        print(f"  [{i + 1}] {m}")
+    choice = input("Select one (number, or 's' to skip): ").strip()
+    if choice.lower() == "s":
+        return None
+    try:
+        idx = int(choice) - 1
+        return matches[idx]
+    except (ValueError, IndexError):
+        print("Invalid selection, skipping.")
+        return None
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        tray_inputs = sys.argv[1:]
+    else:
+        raw = input("Enter tray number(s) (e.g. 5, 12, Tray000012, or space-separated): ").strip()
+        if not raw:
+            print("No tray specified.")
+            sys.exit(1)
+        tray_inputs = raw.split()
+
+    for ti in tray_inputs:
+        tray_path = resolve_tray(ti.strip())
+        if tray_path:
+            process_tray(tray_path)
