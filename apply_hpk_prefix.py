@@ -104,7 +104,10 @@ def apply_hpk_prefix(tray_path):
 
 
 if __name__ == "__main__":
-    tray_input = input("Enter tray number (e.g. 5, 12, Tray000012): ").strip()
+    if len(sys.argv) > 1:
+        tray_input = sys.argv[1].strip()
+    else:
+        tray_input = input("Enter tray number (e.g. 5, 12, Tray000012): ").strip()
     if not tray_input:
         print("No tray specified.")
         sys.exit(1)
