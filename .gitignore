@@ -1,7 +1,11 @@
+# Config
+config.py
+
 # Data
 checked/
 input/
 output/
+referencia/
 
 # Python
 __pycache__/

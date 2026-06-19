@@ -134,12 +134,17 @@ def update_summary(script_dir, box, vendor_folder, tray_results):
             cell.alignment = center
             all_cols[h] = c_idx
 
-    # ── Read existing data into a dict keyed by (Vendor, Box, Tray) ──
+    # ── Read existing data, skip blank rows ──────────────────────────
     rows = []
     for row_idx in range(2, ws.max_row + 1):
         row_data = {}
         for h, c_idx in all_cols.items():
             row_data[h] = ws.cell(row=row_idx, column=c_idx).value
+        v = row_data.get("Vendor")
+        b = row_data.get("Box")
+        t = row_data.get("Tray")
+        if (v is None or str(v).strip() == "") and (b is None or str(b).strip() == "") and (t is None or str(t).strip() == ""):
+            continue
         rows.append(row_data)
 
     # ── Update or append ───────────────────────────────────────────
@@ -154,6 +159,7 @@ def update_summary(script_dir, box, vendor_folder, tray_results):
         existing_keys.add(key)
 
     for key, status in new_tray_data.items():
+        vendor, box_num_t, tray_short = key
         if key in existing_keys:
             # Update Status (unless "upload")
             for rd in rows:
@@ -162,11 +168,12 @@ def update_summary(script_dir, box, vendor_folder, tray_results):
                         rd["Status"] = status
                     break
         else:
-            new_row = {"Vendor": key[0], "Box": key[1], "Tray": key[2], "Status": status}
+            new_row = {"Vendor": vendor, "Box": box_num_t, "Tray": tray_short, "Status": status}
             for h in all_cols:
                 if h not in new_row:
                     new_row[h] = None
             rows.append(new_row)
+            existing_keys.add(key)
 
     # ── Sort by Vendor, Box, Tray ──────────────────────────────────
     def sort_key(rd):
@@ -306,7 +313,7 @@ def process_box():
     global_log.write("Only showing applied fixes and actual errors.\n\n")
 
     exported_count = 0
-    skipped_count = 0
+    error_count = 0
     important_fix_trays = []
     tray_results = {}
 
@@ -407,8 +414,13 @@ def process_box():
         )
 
         if has_errors:
-            print("ERRORS FOUND - not exported.")
-            global_log.write(f"--- {tray} [NOT EXPORTED] ---\n")
+            print("ERRORS FOUND - exported as-is.")
+            tray_checked_name = f"{tray}_checked"
+            final_tray_path = os.path.join(output_dir, tray_checked_name)
+            if os.path.exists(final_tray_path):
+                shutil.rmtree(final_tray_path)
+            shutil.copytree(tray_src, final_tray_path)
+            global_log.write(f"--- {tray} [EXPORTED WITH ERRORS] ---\n")
             if important_lines:
                 global_log.write("  IMPORTANT:\n")
                 for fl in important_lines:
@@ -419,7 +431,7 @@ def process_box():
                     global_log.write(f"  -{fl}\n")
             global_log.write("\n")
             tray_results[tray] = "error"
-            skipped_count += 1
+            error_count += 1
         else:
             # Export the tray
             tray_checked_name = f"{tray}_checked"
@@ -459,7 +471,7 @@ def process_box():
         os.remove("index.pkl")
 
     print(f"\n==================================================")
-    print(f" Results: {exported_count} trays exported, {skipped_count} trays skipped.")
+    print(f" Results: {exported_count} trays OK, {error_count} trays with errors.")
     if important_fix_trays:
         print(f" Review log for: {', '.join(important_fix_trays)}")
 
@@ -477,7 +489,8 @@ def process_box():
         return
 
     # --- STEP 9: Always move output to checked/<vendor>/ (even with errors) ---
-    if exported_count > 0:
+    total_trays = exported_count + error_count
+    if total_trays > 0:
         checked_dir = os.path.join(script_dir, 'checked', vendor_folder)
         os.makedirs(checked_dir, exist_ok=True)
 
@@ -493,7 +506,7 @@ def process_box():
         print(f" No trays exported. Log saved to: output/global_validation_log.txt")
 
     # --- STEP 10: Update summary.xlsx ---
-    remote_ok = copy_to_remote(dest_path, vendor_folder) if exported_count > 0 else False
+    remote_ok = copy_to_remote(dest_path, vendor_folder) if total_trays > 0 else False
     summary_path = update_summary(script_dir, box, vendor_folder, tray_results)
     print(f" Summary: checked/summary.xlsx")
 
