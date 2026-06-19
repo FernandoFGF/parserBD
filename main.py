@@ -30,6 +30,19 @@ def sftp_put_file(sftp, local_path, remote_path):
     sftp.put(local_path, remote_path)
 
 
+def progress_bar(done, total, label, width=30):
+    """Draw an in-place progress bar: [====>    ] 52% (1023/1965)"""
+    pct = done * 100 // total if total else 100
+    filled = int(width * done / total) if total else width
+    bar = "=" * filled
+    if filled < width:
+        bar = bar[:-1] + ">" + " " * (width - filled)
+    sys.stdout.write(f"\r   {label}: [{bar}] {pct:3d}% ({done}/{total})")
+    sys.stdout.flush()
+    if done == total:
+        sys.stdout.write("\n")
+
+
 def copy_to_remote(local_path, vendor_folder):
     """Zip the checked folder and upload the zip to remote."""
     if not SSH_REMOTE_HOST:
@@ -51,8 +64,8 @@ def copy_to_remote(local_path, vendor_folder):
             for i, file_path in enumerate(file_list):
                 arcname = os.path.relpath(file_path, local_path)
                 zf.write(file_path, arcname)
-                if (i + 1) % 200 == 0 or (i + 1) == total:
-                    print(f"   Zip: {i + 1}/{total} files")
+                if (i + 1) % 50 == 0 or (i + 1) == total:
+                    progress_bar(i + 1, total, "Zipping")
         zip_size_mb = os.path.getsize(zip_path) / (1024 * 1024)
         print(f"   Zip done: {zip_size_mb:.1f} MB")
 
@@ -78,17 +91,12 @@ def copy_to_remote(local_path, vendor_folder):
         except FileNotFoundError:
             pass
 
-        last_pct = [-1]
-        zip_total_mb = zip_size_mb
-
-        def progress_cb(transferred, total):
-            if total == 0:
+        def progress_cb(transferred, _total):
+            if _total == 0:
                 return
-            pct = int(transferred * 100 / total)
-            if pct // 10 != last_pct[0] // 10:
-                last_pct[0] = pct
-                mb_done = transferred / (1024 * 1024)
-                print(f"   Upload: {pct}% ({mb_done:.0f}/{zip_total_mb:.0f} MB)")
+            mb_done = int(transferred / (1024 * 1024))
+            mb_total = int(zip_size_mb)
+            progress_bar(mb_done, mb_total, "Upload")
 
         print(f"   Uploading {folder_name}.zip ({zip_size_mb:.1f} MB)...")
         sftp.put(zip_path, remote_zip, callback=progress_cb)
