@@ -78,8 +78,20 @@ def copy_to_remote(local_path, vendor_folder):
         except FileNotFoundError:
             pass
 
+        last_pct = [-1]
+        zip_total_mb = zip_size_mb
+
+        def progress_cb(transferred, total):
+            if total == 0:
+                return
+            pct = int(transferred * 100 / total)
+            if pct // 10 != last_pct[0] // 10:
+                last_pct[0] = pct
+                mb_done = transferred / (1024 * 1024)
+                print(f"   Upload: {pct}% ({mb_done:.0f}/{zip_total_mb:.0f} MB)")
+
         print(f"   Uploading {folder_name}.zip ({zip_size_mb:.1f} MB)...")
-        sftp.put(zip_path, remote_zip)
+        sftp.put(zip_path, remote_zip, callback=progress_cb)
         sftp.close()
         transport.close()
 
