@@ -346,17 +346,30 @@ def process_box():
 
     # --- STEP 1.5: Flatten intermediate folders that wrap Tray dirs ---
     tray_pattern = re.compile(r"^Tray\d{6}$")
-    for entry in os.listdir(temp_box):
-        entry_path = os.path.join(temp_box, entry)
-        if not os.path.isdir(entry_path) or tray_pattern.match(entry):
-            continue
-        for sub in os.listdir(entry_path):
-            if tray_pattern.match(sub):
-                dest = os.path.join(temp_box, sub)
-                if not os.path.exists(dest):
-                    shutil.move(os.path.join(entry_path, sub), dest)
-        if not os.listdir(entry_path):
-            shutil.rmtree(entry_path)
+    # Walk the whole tree repeatedly until no nested trays remain
+    changed = True
+    while changed:
+        changed = False
+        for root, dirs, _files in os.walk(temp_box, topdown=False):
+            for d in dirs:
+                if tray_pattern.match(d):
+                    parent = os.path.basename(root)
+                    if parent == os.path.basename(temp_box):
+                        continue  # already at top level
+                    src = os.path.join(root, d)
+                    dest = os.path.join(temp_box, d)
+                    if not os.path.exists(dest):
+                        shutil.move(src, dest)
+                    else:
+                        # Merge: move contents from nested tray into existing one
+                        for item in os.listdir(src):
+                            shutil.move(os.path.join(src, item), os.path.join(dest, item))
+                        shutil.rmtree(src)
+                    changed = True
+            # Remove empty intermediate folders (bottom-up)
+            if root != temp_box and not os.listdir(root):
+                shutil.rmtree(root)
+                changed = True
 
     # --- STEP 2: Find all Tray folders ---
     tray_folders = sorted([f for f in os.listdir(temp_box)
