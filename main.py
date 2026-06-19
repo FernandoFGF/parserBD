@@ -47,11 +47,11 @@ def copy_to_remote(local_path, vendor_folder):
 
         total = len(file_list)
         print(f"\n   Zipping {total} files from {folder_name}...")
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zf:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
             for i, file_path in enumerate(file_list):
                 arcname = os.path.relpath(file_path, local_path)
                 zf.write(file_path, arcname)
-                if (i + 1) % 500 == 0 or (i + 1) == total:
+                if (i + 1) % 200 == 0 or (i + 1) == total:
                     print(f"   Zip: {i + 1}/{total} files")
         zip_size_mb = os.path.getsize(zip_path) / (1024 * 1024)
         print(f"   Zip done: {zip_size_mb:.1f} MB")
