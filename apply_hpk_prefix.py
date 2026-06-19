@@ -87,14 +87,16 @@ def _extract_tray_num(tray_name):
     return None
 
 
-def find_upload_source(tray_path):
+def find_upload_source(tray_path, batch=False):
     tray_name = os.path.basename(tray_path)
     tray_num = _extract_tray_num(tray_name)
     if not tray_num:
-        print(f"  [WARN] Cannot extract tray number from {tray_name}")
+        if not batch:
+            print(f"  [WARN] Cannot extract tray number from {tray_name}")
         return None
     if not os.path.isdir(CHECKED_BOXES_DIR):
-        print(f"  [WARN] checked_boxes dir not found: {CHECKED_BOXES_DIR}")
+        if not batch:
+            print(f"  [WARN] checked_boxes dir not found: {CHECKED_BOXES_DIR}")
         return None
 
     upload_name = f"Tray{tray_num.zfill(6)}-upload"
@@ -106,15 +108,19 @@ def find_upload_source(tray_path):
                 matches.append(os.path.join(root, d))
 
     if not matches:
-        print(f"  [WARN] {upload_name} not found in checked_boxes")
+        if not batch:
+            print(f"  [WARN] {upload_name} not found in checked_boxes")
         return None
     if len(matches) == 1:
         return matches[0]
     auto = _filter_upload_by_config(matches)
     if auto:
-        print(f"  Auto-selected by config (dest={_get_destination()}, box={VENDOR_BOX_NUMBER}):")
-        print(f"    {auto}")
+        if not batch:
+            print(f"  Auto-selected by config (dest={_get_destination()}, box={VENDOR_BOX_NUMBER}):")
+            print(f"    {auto}")
         return auto
+    if batch:
+        return None
     print(f"  Found {len(matches)} matches for {upload_name}:")
     for i, m in enumerate(matches):
         print(f"    [{i + 1}] {m}")

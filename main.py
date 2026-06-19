@@ -48,7 +48,7 @@ def copy_to_remote(local_path, vendor_folder):
                     zf.write(file_path, arcname)
 
         transport = paramiko.Transport((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
-        transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD)
+        transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD, timeout=30)
         sftp = paramiko.SFTPClient.from_transport(transport)
 
         remote_base = f"{SSH_REMOTE_PATH}/{vendor_folder}"
@@ -527,7 +527,7 @@ def process_box():
             for tray in sorted(upload_fix_trays):
                 tray_checked_name = f"{tray}_checked"
                 tray_path = os.path.join(dest_path, tray_checked_name)
-                source = hpkupload.find_upload_source(tray_path)
+                source = hpkupload.find_upload_source(tray_path, batch=True)
                 if source:
                     hpkupload.replace_with_upload(tray_path, source)
                     hpkupload.apply_hpk_prefix(tray_path)
@@ -555,7 +555,7 @@ def process_box():
     if SSH_REMOTE_HOST and summary_path:
         try:
             transport = paramiko.Transport((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
-            transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD)
+            transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD, timeout=30)
             sftp = paramiko.SFTPClient.from_transport(transport)
             remote_summary = f"{SSH_REMOTE_PATH}/summary.xlsx"
             sftp_put_file(sftp, summary_path, remote_summary)
