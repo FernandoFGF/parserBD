@@ -10,6 +10,7 @@ import pandas as pd
 from config import VENDOR_DELIVERY_ID, SSH_REMOTE_HOST, SSH_REMOTE_PORT, SSH_USERNAME, SSH_PASSWORD, SSH_REMOTE_PATH
 from fixes import fix_noise_floats, fix_daq_errors, fix_empty_cells, fix_missing_iv_rows, fix_manifest, fix_missing_ids, fix_hpk_prefix, fix_comments
 from validators import check_sequence, check_dates, check_means, check_ids
+import apply_hpk_prefix as hpkupload
 
 
 def sftp_put_file(sftp, local_path, remote_path):
@@ -94,6 +95,7 @@ def update_summary(script_dir, box, vendor_folder, tray_results):
         "warning": PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"),
         "error":   PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
         "upload":  PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid"),
+        "ruben":   PatternFill(start_color="F4B4C2", end_color="F4B4C2", fill_type="solid"),
     }
     header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
     header_font = Font(color="FFFFFF", bold=True)
@@ -316,6 +318,7 @@ def process_box():
     error_count = 0
     important_fix_trays = []
     tray_results = {}
+    upload_fix_trays = set()
 
     # --- STEP 4: Process each tray individually ---
     
@@ -432,6 +435,8 @@ def process_box():
             global_log.write("\n")
             tray_results[tray] = "error"
             error_count += 1
+            if any("No match" in fl or "Consecution broken" in fl for fl in filtered_lines):
+                upload_fix_trays.add(tray)
         else:
             # Export the tray
             tray_checked_name = f"{tray}_checked"
@@ -504,6 +509,21 @@ def process_box():
         print(f" Saved to: checked/{vendor_folder}/{box}_checked")
     else:
         print(f" No trays exported. Log saved to: output/global_validation_log.txt")
+
+    # --- STEP 9.5: Auto-apply upload fix to trays with missing-row errors ---
+    if upload_fix_trays and total_trays > 0:
+        print(f"\n Auto-applying upload fix to {len(upload_fix_trays)} error tray(s)...")
+        for tray in sorted(upload_fix_trays):
+            tray_checked_name = f"{tray}_checked"
+            tray_path = os.path.join(dest_path, tray_checked_name)
+            source = hpkupload.find_upload_source(tray_path)
+            if source:
+                hpkupload.replace_with_upload(tray_path, source)
+                hpkupload.apply_hpk_prefix(tray_path)
+                print(f"  [OK] {tray_checked_name}: replaced from checked_boxes + HPK prefix applied")
+                tray_results[tray] = "ruben"
+            else:
+                print(f"  [SKIP] {tray_checked_name}: no upload source found in checked_boxes")
 
     # --- STEP 10: Update summary.xlsx ---
     remote_ok = copy_to_remote(dest_path, vendor_folder) if total_trays > 0 else False
