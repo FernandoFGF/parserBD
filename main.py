@@ -331,9 +331,9 @@ def process_box():
     print(f"   Found {len(tray_folders)} trays: {tray_folders[0]} ... {tray_folders[-1]}\n")
 
     # --- STEP 3: Global log (reset each run) ---
-    global_log_path = os.path.join(output_dir, "global_validation_log.txt")
+    global_log_path = os.path.join(output_dir, "global_validation_log.md")
     global_log = open(global_log_path, "w", encoding="utf-8")
-    global_log.write(f"=== GLOBAL VALIDATION & FIX LOG for {box} ===\n")
+    global_log.write(f"# Validation & Fix Log for {box}\n\n")
     global_log.write("Only showing applied fixes and actual errors.\n\n")
 
     exported_count = 0
@@ -445,15 +445,15 @@ def process_box():
             if os.path.exists(final_tray_path):
                 shutil.rmtree(final_tray_path)
             shutil.copytree(tray_src, final_tray_path)
-            global_log.write(f"--- {tray} [EXPORTED WITH ERRORS] ---\n")
+            global_log.write(f"## {tray} — ❌ EXPORTED WITH ERRORS\n\n")
             if important_lines:
-                global_log.write("  IMPORTANT:\n")
+                global_log.write("**IMPORTANT:**\n")
                 for fl in important_lines:
-                    global_log.write(f"  -{fl}\n")
+                    global_log.write(f"- {fl}\n")
             if not_important_lines:
-                global_log.write("  NOT IMPORTANT:\n")
+                global_log.write("**NOT IMPORTANT:**\n")
                 for fl in not_important_lines:
-                    global_log.write(f"  -{fl}\n")
+                    global_log.write(f"- {fl}\n")
             global_log.write("\n")
             tray_results[tray] = "error"
             error_count += 1
@@ -469,19 +469,19 @@ def process_box():
 
             if filtered_lines:
                 print("OK (fixes applied).")
-                global_log.write(f"--- {tray} [EXPORTED WITH FIXES] ---\n")
+                global_log.write(f"## {tray} — ⚠️ EXPORTED WITH FIXES\n\n")
                 if important_lines:
-                    global_log.write("  IMPORTANT:\n")
+                    global_log.write("**IMPORTANT:**\n")
                     for fl in important_lines:
-                        global_log.write(f"  -{fl}\n")
+                        global_log.write(f"- {fl}\n")
                 if not_important_lines:
-                    global_log.write("  NOT IMPORTANT:\n")
+                    global_log.write("**NOT IMPORTANT:**\n")
                     for fl in not_important_lines:
-                        global_log.write(f"  -{fl}\n")
+                        global_log.write(f"- {fl}\n")
                 global_log.write("\n")
             else:
                 print("OK.")
-                global_log.write(f"--- {tray} [EXPORTED] ---\n\n")
+                global_log.write(f"## {tray} — ✅ EXPORTED\n\n")
 
             tray_results[tray] = "warning" if tray in important_fix_trays else "checked"
             exported_count += 1
@@ -530,15 +530,15 @@ def process_box():
 
         print(f" Saved to: checked/{vendor_folder}/{box}_checked")
     else:
-        print(f" No trays exported. Log saved to: output/global_validation_log.txt")
+        print(f" No trays exported. Log saved to: output/global_validation_log.md")
 
     # --- STEP 9.5: Auto-apply upload fix to trays with missing-row errors ---
     tray_comments = {}
     if upload_fix_trays and total_trays > 0:
         print(f"\n Auto-applying upload fix to {len(upload_fix_trays)} error tray(s)...")
-        upload_log_path = os.path.join(dest_path, "upload_fix_log.txt")
-        with open(upload_log_path, "w", encoding="utf-8") as ulf:
-            ulf.write(f"=== UPLOAD FIX LOG for {box} ===\n\n")
+        gl_path = os.path.join(dest_path, "global_validation_log.md")
+        with open(gl_path, "a", encoding="utf-8") as gl:
+            gl.write(f"## Upload Fix\n\n")
             for tray in sorted(upload_fix_trays):
                 tray_checked_name = f"{tray}_checked"
                 tray_path = os.path.join(dest_path, tray_checked_name)
@@ -546,20 +546,17 @@ def process_box():
                 if source:
                     hpkupload.replace_with_upload(tray_path, source)
                     hpkupload.apply_hpk_prefix(tray_path)
-                    msg = f"Replaced from checked_boxes: {source}"
+                    msg = f"Replaced from `{source}`"
                     print(f"  [OK] {tray_checked_name}: {msg}")
-                    ulf.write(f"  {tray_checked_name}: {msg}\n")
+                    gl.write(f"- **{tray_checked_name}**: {msg}\n")
                     tray_results[tray] = "warning"
                     tray_short = int(tray.replace("Tray", "").lstrip("0") or "0")
                     tray_comments[(vendor_folder, int(box[3:]), tray_short)] = "ruben"
                 else:
                     msg = "no upload source found in checked_boxes"
                     print(f"  [SKIP] {tray_checked_name}: {msg}")
-                    ulf.write(f"  {tray_checked_name}: {msg}\n")
-        with open(os.path.join(dest_path, "global_validation_log.txt"), "a", encoding="utf-8") as gl:
-            gl.write(f"\n=== UPLOAD FIX LOG ===\n")
-            with open(upload_log_path, "r", encoding="utf-8") as ulf2:
-                gl.write(ulf2.read())
+                    gl.write(f"- **{tray_checked_name}**: {msg}\n")
+            gl.write("\n")
 
     # --- STEP 10: Update summary.xlsx ---
     remote_ok = copy_to_remote(dest_path, vendor_folder) if total_trays > 0 else False
