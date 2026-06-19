@@ -91,11 +91,17 @@ def copy_to_remote(local_path, vendor_folder):
         except FileNotFoundError:
             pass
 
+        upload_done = [False]
+
         def progress_cb(transferred, _total):
             if _total == 0:
                 return
             mb_done = int(transferred / (1024 * 1024))
             mb_total = int(zip_size_mb)
+            if mb_done >= mb_total:
+                if upload_done[0]:
+                    return
+                upload_done[0] = True
             progress_bar(mb_done, mb_total, "Upload")
 
         print(f"   Uploading {folder_name}.zip ({zip_size_mb:.1f} MB)...")
@@ -338,8 +344,21 @@ def process_box():
             except Exception as e:
                 print(f"   [Error] Could not extract {item}: {e}")
 
-    # --- STEP 2: Find all Tray folders ---
+    # --- STEP 1.5: Flatten intermediate folders that wrap Tray dirs ---
     tray_pattern = re.compile(r"^Tray\d{6}$")
+    for entry in os.listdir(temp_box):
+        entry_path = os.path.join(temp_box, entry)
+        if not os.path.isdir(entry_path) or tray_pattern.match(entry):
+            continue
+        for sub in os.listdir(entry_path):
+            if tray_pattern.match(sub):
+                dest = os.path.join(temp_box, sub)
+                if not os.path.exists(dest):
+                    shutil.move(os.path.join(entry_path, sub), dest)
+        if not os.listdir(entry_path):
+            shutil.rmtree(entry_path)
+
+    # --- STEP 2: Find all Tray folders ---
     tray_folders = sorted([f for f in os.listdir(temp_box)
                            if os.path.isdir(os.path.join(temp_box, f)) and tray_pattern.match(f)])
 
