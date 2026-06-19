@@ -7,6 +7,8 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import VENDOR
 
+CHECKED_BOXES_DIR = r"C:\Users\Ferna\Desktop\database\checked_boxes"
+
 FILES = [
     "SiPM-item-manifest.xlsx",
     "IV-SiPM-characterization.xlsx",
@@ -14,6 +16,74 @@ FILES = [
     "SiPM-mass-test-results.xlsx",
     "Dark-noise-SiPM-counts.xlsx",
 ]
+
+
+def _extract_tray_num(tray_name):
+    m = re.search(r"Tray(\d+)", tray_name, re.IGNORECASE)
+    if m:
+        return m.group(1)
+    return None
+
+
+def find_upload_source(tray_path):
+    tray_name = os.path.basename(tray_path)
+    tray_num = _extract_tray_num(tray_name)
+    if not tray_num:
+        print(f"  [WARN] Cannot extract tray number from {tray_name}")
+        return None
+    if not os.path.isdir(CHECKED_BOXES_DIR):
+        print(f"  [WARN] checked_boxes dir not found: {CHECKED_BOXES_DIR}")
+        return None
+
+    matches = []
+    for root, dirs, _files in os.walk(CHECKED_BOXES_DIR):
+        dirs[:] = [d for d in dirs if not d.startswith("~$")]
+        for d in dirs:
+            if f"Tray{tray_num}" in d:
+                matches.append(os.path.join(root, d))
+
+    if not matches:
+        print(f"  [WARN] Tray {tray_num} not found in checked_boxes")
+        return None
+    if len(matches) == 1:
+        return matches[0]
+    tray_paths = [os.path.dirname(os.path.dirname(m)) for m in matches]
+    if len(set(tray_paths)) == 1:
+        return matches[0]
+    print(f"  Found {len(matches)} matches in checked_boxes:")
+    for i, m in enumerate(matches):
+        print(f"    [{i + 1}] {m}")
+    choice = input("  Select one (number, or 's' to skip): ").strip()
+    if choice.lower() == "s":
+        return None
+    try:
+        return matches[int(choice) - 1]
+    except (ValueError, IndexError):
+        print("  Invalid selection, skipping.")
+        return None
+
+
+def replace_with_upload(tray_path, source_path):
+    tray_name = os.path.basename(tray_path)
+    print(f"  Replacing {tray_name} with content from:")
+    print(f"    {source_path}")
+
+    for item in os.listdir(tray_path):
+        item_path = os.path.join(tray_path, item)
+        if os.path.isdir(item_path):
+            shutil.rmtree(item_path)
+        else:
+            os.remove(item_path)
+
+    for item in os.listdir(source_path):
+        src = os.path.join(source_path, item)
+        dst = os.path.join(tray_path, item)
+        if os.path.isdir(src):
+            shutil.copytree(src, dst)
+        else:
+            shutil.copy2(src, dst)
+
+    print(f"  [OK] Content replaced.")
 
 
 def find_tray_path(tray_input):
@@ -106,6 +176,11 @@ def apply_hpk_prefix(tray_path):
 
 def process_tray(tray_path):
     print(f"\nProcessing: {tray_path}")
+
+    source = find_upload_source(tray_path)
+    if source:
+        replace_with_upload(tray_path, source)
+
     ok = apply_hpk_prefix(tray_path)
     if ok:
         print("Done: HPK prefixes applied.")
