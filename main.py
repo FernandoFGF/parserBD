@@ -57,8 +57,12 @@ def copy_to_remote(local_path, vendor_folder):
         print(f"   Zip done: {zip_size_mb:.1f} MB")
 
         print(f"   Connecting to {SSH_REMOTE_HOST}...")
-        transport = paramiko.Transport((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
-        transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD, timeout=30)
+        import socket
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(30)
+        sock.connect((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
+        transport = paramiko.Transport(sock)
+        transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD)
         sftp = paramiko.SFTPClient.from_transport(transport)
 
         remote_base = f"{SSH_REMOTE_PATH}/{vendor_folder}"
@@ -565,8 +569,12 @@ def process_box():
     # --- STEP 11: Sync summary.xlsx to remote ---
     if SSH_REMOTE_HOST and summary_path:
         try:
-            transport = paramiko.Transport((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
-            transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD, timeout=30)
+            import socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(30)
+            sock.connect((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
+            transport = paramiko.Transport(sock)
+            transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD)
             sftp = paramiko.SFTPClient.from_transport(transport)
             remote_summary = f"{SSH_REMOTE_PATH}/summary.xlsx"
             sftp_put_file(sftp, summary_path, remote_summary)
