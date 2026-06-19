@@ -35,22 +35,20 @@ def find_upload_source(tray_path):
         print(f"  [WARN] checked_boxes dir not found: {CHECKED_BOXES_DIR}")
         return None
 
+    upload_name = f"Tray{tray_num.zfill(6)}-upload"
     matches = []
     for root, dirs, _files in os.walk(CHECKED_BOXES_DIR):
         dirs[:] = [d for d in dirs if not d.startswith("~$")]
         for d in dirs:
-            if f"Tray{tray_num}" in d:
+            if d == upload_name:
                 matches.append(os.path.join(root, d))
 
     if not matches:
-        print(f"  [WARN] Tray {tray_num} not found in checked_boxes")
+        print(f"  [WARN] {upload_name} not found in checked_boxes")
         return None
     if len(matches) == 1:
         return matches[0]
-    tray_paths = [os.path.dirname(os.path.dirname(m)) for m in matches]
-    if len(set(tray_paths)) == 1:
-        return matches[0]
-    print(f"  Found {len(matches)} matches in checked_boxes:")
+    print(f"  Found {len(matches)} matches for {upload_name}:")
     for i, m in enumerate(matches):
         print(f"    [{i + 1}] {m}")
     choice = input("  Select one (number, or 's' to skip): ").strip()
