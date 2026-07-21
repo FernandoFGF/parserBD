@@ -288,7 +288,7 @@ def process_box():
         shutil.rmtree(output_dir)
     os.makedirs(output_dir)
 
-    # Find a single Box folder in input
+    # Find Box folders in input
     box_folders = [f for f in os.listdir(input_dir)
                    if os.path.isdir(os.path.join(input_dir, f)) and f.startswith('Box')]
 
@@ -297,9 +297,19 @@ def process_box():
         print("Place exactly ONE Box folder (e.g. Box05) inside 'input/' and run again.")
         return
 
-    if len(box_folders) > 1:
-        print(f"Multiple Box folders found: {box_folders}")
-        print("Please place only ONE Box folder in 'input/' at a time.")
+    # Filter by VENDOR_BOX_NUMBER from config (match numerically, so Box05 matches 5)
+    import config
+    import re
+    target_box_num = config.VENDOR_BOX_NUMBER
+    box_folders = [
+        f for f in box_folders
+        if (m := re.match(r'^Box(\d+)$', f)) and int(m.group(1)) == target_box_num
+    ]
+
+    if not box_folders:
+        print(f"No Box folder found for number {config.VENDOR_BOX_NUMBER} in the 'input/' directory.")
+        print(f"Expected a folder like Box{config.VENDOR_BOX_NUMBER:02d} or Box{config.VENDOR_BOX_NUMBER} (based on VENDOR_BOX_NUMBER = {config.VENDOR_BOX_NUMBER})")
+        print(f"Available folders: {[f for f in os.listdir(input_dir) if os.path.isdir(os.path.join(input_dir, f)) and f.startswith('Box')]}")
         return
 
     box = box_folders[0]
@@ -420,6 +430,8 @@ def process_box():
 
         print(f" > Processing {tray}...", end=" ")
 
+        date_warnings = []
+
         try:
             sys.stdout = log_stream
 
@@ -435,10 +447,14 @@ def process_box():
 
             # -- VALIDATORS --
             check_sequence.check_sipm_location(tray_sandbox)
-            check_dates.check_dates(tray_sandbox)
+            date_errors, date_warnings = check_dates.check_dates(tray_sandbox)
             check_means.check_means(tray_sandbox)
             check_ids.find_all_ids(tray_sandbox)
             check_ids.check_coincident_ids(tray_sandbox)
+
+            # Append date errors to log for this tray
+            for de in date_errors:
+                log_stream.write(de + "\n")
 
         except Exception as e:
             log_stream.write(f"\n[CRITICAL ERROR] {e}\n")
@@ -468,6 +484,7 @@ def process_box():
             if "=> OK" in line_str: continue
             if "processed." in line_str: continue
             if "Processing file in" in line_str: continue
+            if "[TS_DIFF]" in line_str: continue
 
             filtered_lines.append(line)
 
@@ -506,6 +523,10 @@ def process_box():
                 global_log.write("**NOT IMPORTANT:**\n")
                 for fl in not_important_lines:
                     global_log.write(f"- {fl}\n")
+            if date_warnings:
+                global_log.write("**TIMESTAMP WARNINGS (not blocking):**\n")
+                for tw in date_warnings:
+                    global_log.write(f"- {tw}\n")
             global_log.write("\n")
             tray_results[tray] = "error"
             error_count += 1
@@ -534,6 +555,12 @@ def process_box():
             else:
                 print("OK.")
                 global_log.write(f"## {tray} — ✅ EXPORTED\n\n")
+
+            if date_warnings:
+                global_log.write("**TIMESTAMP WARNINGS (not blocking):**\n")
+                for tw in date_warnings:
+                    global_log.write(f"- {tw}\n")
+                global_log.write("\n")
 
             tray_results[tray] = "warning" if tray in important_fix_trays else "checked"
             exported_count += 1

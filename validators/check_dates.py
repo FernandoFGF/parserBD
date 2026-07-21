@@ -37,11 +37,26 @@ def check_matches(box_name, tray_name, tray_path):
       2. ROOMT: 'ROOMT' subfolder (without cycle subfolders).
          Compares folder date vs .txt file date for room_f / room_r,
          but WITHOUT comparing 1st vs 3rd cycle.
+
+    Returns:
+        (errors, warnings): tuple of lists. errors = real date mismatches.
+        warnings = only time mismatches (same date, different time).
     """
-    messages = []
+    errors = []
+    warnings = []
+
+    def _time_only_mismatch(date1, date2):
+        """Return True if same date (DD_MM_YYYY) but different time (HH_MM)."""
+        parts1 = date1.split("-")
+        parts2 = date2.split("-")
+        if len(parts1) != 2 or len(parts2) != 2:
+            return False
+        date_part1, time_part1 = parts1
+        date_part2, time_part2 = parts2
+        return date_part1 == date_part2 and time_part1 != time_part2
 
     # 1) LN2 PROCESS (with First_Cycle and Third_Cycle)
-    cycle_dates = {}  # will store dates for LN2_forward / LN2_reverse in first and third cycle
+    cycle_dates = {}
     cycles = ["First_Cycle", "Third_Cycle"]
     ln2_base_path = os.path.join(tray_path, "LN2")
 
@@ -66,8 +81,12 @@ def check_matches(box_name, tray_name, tray_path):
                                     file_date = file_match.group(1)
                                     if folder_date == file_date:
                                         cycle_dates.setdefault((key, cycle_name), []).append(file_date)
+                                    elif _time_only_mismatch(folder_date, file_date):
+                                        warnings.append(
+                                            f"[TS_DIFF] .txt '{file}' ({key}, {cycle_name}): time {file_date.split('-')[1]} vs folder {folder_date.split('-')[1]}."
+                                        )
                                     else:
-                                        messages.append(
+                                        errors.append(
                                             f"Mismatch between .txt '{file}' ({key}, {cycle_name}) and folder '{folder}'."
                                         )
 
@@ -89,20 +108,32 @@ def check_matches(box_name, tray_name, tray_path):
                             if file_match:
                                 file_date = file_match.group(1)
                                 if folder_date != file_date:
-                                    messages.append(
-                                        f"Mismatch between .txt '{file}' ({key}) and folder '{folder}'."
-                                    )
+                                    if _time_only_mismatch(folder_date, file_date):
+                                        warnings.append(
+                                            f"[TS_DIFF] .txt '{file}' ({key}): time {file_date.split('-')[1]} vs folder {folder_date.split('-')[1]}."
+                                        )
+                                    else:
+                                        errors.append(
+                                            f"Mismatch between .txt '{file}' ({key}) and folder '{folder}'."
+                                        )
 
     # 3) Show results if there are messages
-    if messages:
+    if errors or warnings:
         print(f"In folder '{tray_name}' of {box_name}:")
-        for msg in messages:
+        for msg in errors:
+            print(" -", msg)
+        for msg in warnings:
             print(" -", msg)
         print()
+
+    return errors, warnings
 
 def check_dates(base_path=None):
     if base_path is None:
         base_path = os.path.dirname(os.path.abspath(__file__))
+
+    all_errors = []
+    all_warnings = []
 
     # SEARCH FOR Box** and Tray******
     for item in os.listdir(base_path):
@@ -113,7 +144,11 @@ def check_dates(base_path=None):
                     if re.match(tray_pattern, subitem):
                         tray_path = os.path.join(box_path, subitem)
                         if os.path.isdir(tray_path):
-                            check_matches(item, subitem, tray_path)
+                            errors, warnings = check_matches(item, subitem, tray_path)
+                            all_errors.extend(errors)
+                            all_warnings.extend(warnings)
+
+    return all_errors, all_warnings
 
 if __name__ == "__main__":
     check_dates()

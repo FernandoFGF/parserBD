@@ -52,17 +52,9 @@ def fix_manifest(base_dir=None):
             if not os.path.isfile(manifest_path):
                 continue
 
-            # Deduce Tray_Number from the folder name
-            # Supports both 4+2 (00XXYY -> XX, YY) and 3+3 (XXYYZZ -> XX, YYZZ) splits
+            # Deduce Tray_Number from the folder name (full 6-digit number)
             digits = tray_match.group(1)
-            first4 = int(digits[0:4])
-            last2 = int(digits[4:6])
-            if first4 != 0 and last2 != 0 and digits.startswith("00"):
-                tray_numbers = [first4, last2]
-            else:
-                first3 = int(digits[0:3])
-                last3 = int(digits[3:6])
-                tray_numbers = [t for t in [first3, last3] if t != 0]
+            tray_numbers = [int(digits)]
 
             try:
                 df = pd.read_excel(manifest_path)
@@ -93,24 +85,13 @@ def fix_manifest(base_dir=None):
                         modified = True
                         print(f"[FIX] {tray_folder}: Vendor_Box_Number -> {box_num}")
 
-                # Fix Tray_Number (auto-detected from folder)
+                # Fix Tray_Number (auto-detected from folder name, e.g. Tray000138 -> 138)
                 if 'Tray_Number' in df.columns:
-                    if len(tray_numbers) == 2:
-                        half = len(df) // 2
-                        first_half = df.iloc[:half, df.columns.get_loc('Tray_Number')]
-                        second_half = df.iloc[half:, df.columns.get_loc('Tray_Number')]
-                        if not (all(int(v) == tray_numbers[0] for v in first_half.dropna()) and
-                                all(int(v) == tray_numbers[1] for v in second_half.dropna())):
-                            df.loc[df.index[:half], 'Tray_Number'] = tray_numbers[0]
-                            df.loc[df.index[half:], 'Tray_Number'] = tray_numbers[1]
-                            modified = True
-                            print(f"[FIX] {tray_folder}: Tray_Number split -> top={tray_numbers[0]}, bottom={tray_numbers[1]}")
-                    elif len(tray_numbers) == 1:
-                        current = df['Tray_Number'].dropna().unique()
-                        if not all(int(v) == tray_numbers[0] for v in current):
-                            df['Tray_Number'] = tray_numbers[0]
-                            modified = True
-                            print(f"[FIX] {tray_folder}: Tray_Number -> {tray_numbers[0]}")
+                    current = df['Tray_Number'].dropna().unique()
+                    if not all(int(v) == tray_numbers[0] for v in current):
+                        df['Tray_Number'] = tray_numbers[0]
+                        modified = True
+                        print(f"[FIX] {tray_folder}: Tray_Number -> {tray_numbers[0]}")
 
                 # Fix Test_Box_ID
                 if 'Test_Box_ID' in df.columns:

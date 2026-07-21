@@ -78,8 +78,13 @@ def fix_missing_iv_rows(base_dir=None):
                     for loc in sorted(missing_locs):
                         new_row = template.copy()
                         new_row['SiPM_Location'] = loc
-                        # Set measurement columns to 1
-                        for col in ['V', 'I', 'I_Err', 'Fit_range_Low',
+                        if 'V' in df.columns:
+                            new_row['V'] = '[1]'
+                        if 'I' in df.columns:
+                            new_row['I'] = '[1]'
+                        if 'I_Err' in df.columns:
+                            new_row['I_Err'] = '[1]'
+                        for col in ['Fit_range_Low',
                                     'Fit_Polynomial_Degree']:
                             if col in df.columns:
                                 new_row[col] = 1
@@ -111,7 +116,13 @@ def fix_missing_iv_rows(base_dir=None):
                         else:
                             new_row = template.copy()
                             new_row['SiPM_Location'] = loc
-                            for col in ['V', 'I', 'I_Err', 'Fit_range_Low',
+                            if 'V' in df.columns:
+                                new_row['V'] = '[1]'
+                            if 'I' in df.columns:
+                                new_row['I'] = '[1]'
+                            if 'I_Err' in df.columns:
+                                new_row['I_Err'] = '[1]'
+                            for col in ['Fit_range_Low',
                                         'Fit_Polynomial_Degree']:
                                 if col in df.columns:
                                     new_row[col] = 1

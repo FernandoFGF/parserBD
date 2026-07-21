@@ -18,7 +18,11 @@ def fix_hpk_prefix(base_dir=None):
         base_dir = os.getcwd()
 
     vendor_upper = VENDOR.strip().upper()
-    if vendor_upper not in ("HAMAMATSU", "HPK"):
+    if vendor_upper in ("HAMAMATSU", "HPK"):
+        prefix = "HPK"
+    elif vendor_upper == "FBK":
+        prefix = "SMB"
+    else:
         return
 
     box_pattern = re.compile(r"^Box\d{2}$")
@@ -60,16 +64,16 @@ def fix_hpk_prefix(base_dir=None):
                         if col not in df.columns:
                             continue
 
-                        def transform_id(val):
+                        def transform_id(val, p=prefix):
                             if pd.isna(val):
                                 return val
                             s = str(val).strip()
-                            if s.startswith("HPK"):
+                            if s.startswith(p):
                                 return val
                             digits = s
                             if digits.isdigit():
                                 padded = digits.zfill(5)
-                                return f"HPK{padded}"
+                                return f"{p}{padded}"
                             return val
 
                         new_vals = df[col].apply(transform_id)
@@ -79,7 +83,7 @@ def fix_hpk_prefix(base_dir=None):
 
                     if modified:
                         df.to_excel(fpath, index=False)
-                        print(f"[FIX] {tray_folder}/{fname}: HPK prefix added to strip IDs.")
+                        print(f"[FIX] {tray_folder}/{fname}: {prefix} prefix added to strip IDs.")
 
                 except Exception as e:
                     print(f"[Error] {tray_folder}/{fname}: {e}")

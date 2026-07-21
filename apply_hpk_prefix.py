@@ -194,8 +194,12 @@ def find_tray_path(tray_input):
 
 def apply_hpk_prefix(tray_path):
     vendor_upper = VENDOR.strip().upper()
-    if vendor_upper not in ("HAMAMATSU", "HPK"):
-        print(f"VENDOR is {VENDOR}, not HPK/HAMAMATSU. HPK prefix not applicable.")
+    if vendor_upper in ("HAMAMATSU", "HPK"):
+        prefix = "HPK"
+    elif vendor_upper == "FBK":
+        prefix = "SMB"
+    else:
+        print(f"VENDOR is {VENDOR}, not HPK/HAMAMATSU/FBK. Prefix not applicable.")
         return False
 
     tray_name = os.path.basename(tray_path)
@@ -219,14 +223,14 @@ def apply_hpk_prefix(tray_path):
                 if col not in df.columns:
                     continue
 
-                def transform_id(val):
+                def transform_id(val, p=prefix):
                     if pd.isna(val):
                         return val
                     s = str(val).strip()
-                    if s.startswith("HPK"):
+                    if s.startswith(p):
                         return val
                     if s.isdigit():
-                        return f"HPK{s.zfill(5)}"
+                        return f"{p}{s.zfill(5)}"
                     return val
 
                 new_vals = df[col].apply(transform_id)
@@ -236,7 +240,7 @@ def apply_hpk_prefix(tray_path):
 
             if modified:
                 df.to_excel(fpath, index=False)
-                print(f"  [FIX] {tray_name}/{fname}: HPK prefix added to strip IDs.")
+                print(f"  [FIX] {tray_name}/{fname}: {prefix} prefix added to strip IDs.")
                 modified_any = True
 
         except Exception as e:
@@ -254,9 +258,9 @@ def process_tray(tray_path):
 
     ok = apply_hpk_prefix(tray_path)
     if ok:
-        print("Done: HPK prefixes applied.")
+        print("Done: vendor prefixes applied.")
     else:
-        print("No changes needed (IDs already have HPK prefix or vendor is not HPK).")
+        print("No changes needed (IDs already have prefix or vendor not applicable).")
 
     tray_name = os.path.basename(tray_path)
     tray_parent = os.path.dirname(tray_path)
