@@ -229,6 +229,9 @@ def apply_hpk_prefix(tray_path):
                     s = str(val).strip()
                     if s.startswith(p):
                         return val
+                    rest = re.sub(r'^[A-Za-z]+', '', s)
+                    if rest != s and rest:
+                        return f"{p}{rest}"
                     if s.isdigit():
                         return f"{p}{s.zfill(5)}"
                     return val

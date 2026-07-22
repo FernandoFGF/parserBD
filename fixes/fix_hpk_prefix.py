@@ -70,10 +70,11 @@ def fix_hpk_prefix(base_dir=None):
                             s = str(val).strip()
                             if s.startswith(p):
                                 return val
-                            digits = s
-                            if digits.isdigit():
-                                padded = digits.zfill(5)
-                                return f"{p}{padded}"
+                            rest = re.sub(r'^[A-Za-z]+', '', s)
+                            if rest != s and rest:
+                                return f"{p}{rest}"
+                            if s.isdigit():
+                                return f"{p}{s.zfill(5)}"
                             return val
 
                         new_vals = df[col].apply(transform_id)
