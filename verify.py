@@ -318,8 +318,8 @@ def verify_char_inserted_rows(tray_path, expected_inserted):
             if loc < 0 or loc > 5:
                 return False, f"Invalid SiPM_Location={loc}"
             for c in ["V", "I", "I_Err"]:
-                if str(row.get(c, "")) != "[1]":
-                    return False, f"Inserted row has {c}='{row[c]}' not '[1]'"
+                if str(row.get(c, "")) != "[0]":
+                    return False, f"Inserted row has {c}='{row[c]}' not '[0]'"
     return True, f"OK ({ic} rows with Status='Failed')"
 
 
