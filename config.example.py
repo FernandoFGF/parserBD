@@ -26,12 +26,6 @@ TEST_BOX_ID = "Gra16"
 # Institution (e.g. '(99) University of Granada & CAFPE')
 INSTITUTION = "(99) University of Granada & CAFPE"
 
-# --- LOCAL PATHS (portable: relative to the project) ---
-# Folder with reference data for the HPK "upload fix".
-# Default: ./referencia ; if missing, that step is skipped.
-# Can be overridden with the SIPM_CHECKED_BOXES environment variable.
-CHECKED_BOXES_DIR = "referencia"
-
 # --- REMOTE SSH SETTINGS (optional) ---
 # If SSH_REMOTE_HOST is empty or None, remote upload is skipped
 # and everything stays local in checked/<vendor>/.

@@ -7,23 +7,6 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import VENDOR, VENDOR_DELIVERY_ID, VENDOR_BOX_NUMBER
 
-try:
-    from config import CHECKED_BOXES_DIR as _CFG_CHECKED_BOXES
-except ImportError:
-    _CFG_CHECKED_BOXES = None
-
-_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CHECKED_BOXES_DIR = (
-    os.environ.get("SIPM_CHECKED_BOXES")
-    or _CFG_CHECKED_BOXES
-    or os.path.join(_BASE_DIR, "referencia")
-)
-
-DEST_TO_UPLOAD_FOLDER = {
-    "CIEMAT": "Box_subidas_CIEMAT",
-    "INFN": "Box_subidas_Italia",
-}
-
 
 def _get_destination():
     parts = str(VENDOR_DELIVERY_ID).split("_")
@@ -64,23 +47,6 @@ def _filter_by_config(matches):
     return None
 
 
-def _filter_upload_by_config(matches):
-    dest = _get_destination()
-    box_suffix = _get_expected_box_suffix()
-    upload_vendor = DEST_TO_UPLOAD_FOLDER.get(dest) if dest else None
-    if not upload_vendor or not box_suffix:
-        return None
-    filtered = []
-    for m in matches:
-        parts = m.replace("\\", "/").split("/")
-        has_vendor = upload_vendor in parts
-        has_box = f"{box_suffix}-upload" in parts
-        if has_vendor and has_box:
-            filtered.append(m)
-    if len(filtered) == 1:
-        return filtered[0]
-    return None
-
 FILES = [
     "SiPM-item-manifest.xlsx",
     "IV-SiPM-characterization.xlsx",
@@ -88,83 +54,6 @@ FILES = [
     "SiPM-mass-test-results.xlsx",
     "Dark-noise-SiPM-counts.xlsx",
 ]
-
-
-def _extract_tray_num(tray_name):
-    m = re.search(r"Tray(\d+)", tray_name, re.IGNORECASE)
-    if m:
-        return m.group(1)
-    return None
-
-
-def find_upload_source(tray_path, batch=False):
-    tray_name = os.path.basename(tray_path)
-    tray_num = _extract_tray_num(tray_name)
-    if not tray_num:
-        if not batch:
-            print(f"  [WARN] Cannot extract tray number from {tray_name}")
-        return None
-    if not os.path.isdir(CHECKED_BOXES_DIR):
-        if not batch:
-            print(f"  [WARN] checked_boxes dir not found: {CHECKED_BOXES_DIR}")
-        return None
-
-    upload_name = f"Tray{tray_num.zfill(6)}-upload"
-    matches = []
-    for root, dirs, _files in os.walk(CHECKED_BOXES_DIR):
-        dirs[:] = [d for d in dirs if not d.startswith("~$")]
-        for d in dirs:
-            if d == upload_name:
-                matches.append(os.path.join(root, d))
-
-    if not matches:
-        if not batch:
-            print(f"  [WARN] {upload_name} not found in checked_boxes")
-        return None
-    if len(matches) == 1:
-        return matches[0]
-    auto = _filter_upload_by_config(matches)
-    if auto:
-        if not batch:
-            print(f"  Auto-selected by config (dest={_get_destination()}, box={VENDOR_BOX_NUMBER}):")
-            print(f"    {auto}")
-        return auto
-    if batch:
-        return None
-    print(f"  Found {len(matches)} matches for {upload_name}:")
-    for i, m in enumerate(matches):
-        print(f"    [{i + 1}] {m}")
-    choice = input("  Select one (number, or 's' to skip): ").strip()
-    if choice.lower() == "s":
-        return None
-    try:
-        return matches[int(choice) - 1]
-    except (ValueError, IndexError):
-        print("  Invalid selection, skipping.")
-        return None
-
-
-def replace_with_upload(tray_path, source_path):
-    tray_name = os.path.basename(tray_path)
-    print(f"  Replacing {tray_name} with content from:")
-    print(f"    {source_path}")
-
-    for item in os.listdir(tray_path):
-        item_path = os.path.join(tray_path, item)
-        if os.path.isdir(item_path):
-            shutil.rmtree(item_path)
-        else:
-            os.remove(item_path)
-
-    for item in os.listdir(source_path):
-        src = os.path.join(source_path, item)
-        dst = os.path.join(tray_path, item)
-        if os.path.isdir(src):
-            shutil.copytree(src, dst)
-        else:
-            shutil.copy2(src, dst)
-
-    print(f"  [OK] Content replaced.")
 
 
 def find_tray_path(tray_input):
@@ -264,10 +153,6 @@ def apply_hpk_prefix(tray_path):
 
 def process_tray(tray_path):
     print(f"\nProcessing: {tray_path}")
-
-    source = find_upload_source(tray_path)
-    if source:
-        replace_with_upload(tray_path, source)
 
     ok = apply_hpk_prefix(tray_path)
     if ok:

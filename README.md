@@ -65,7 +65,6 @@ python verify.py hpk_infn Box15
 | Code: `main.py`, `verify.py`, `fixes/`, `validators/`, `requirements.txt`, `config.example.py` | `config.py` (local data) |
 | | `input/` (raw data) |
 | | `checked/` and `output/` (results and temp files) |
-| | `referencia/` (HPK only, optional) |
 
 A zip of the code without those folders and without `config.py` is enough. The recipient creates their own `config.py` from `config.example.py`.
 

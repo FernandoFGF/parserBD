@@ -8,8 +8,7 @@ input/*
 !input/.gitkeep
 output/*
 !output/.gitkeep
-referencia/*
-!referencia/.gitkeep
+referencia/
 
 # Python
 __pycache__/

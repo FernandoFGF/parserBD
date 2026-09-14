@@ -10,7 +10,6 @@ import pandas as pd
 from config import VENDOR_DELIVERY_ID, SSH_REMOTE_HOST, SSH_REMOTE_PORT, SSH_USERNAME, SSH_PASSWORD, SSH_REMOTE_PATH
 from fixes import fix_noise_floats, fix_daq_errors, fix_empty_cells, fix_missing_iv_rows, fix_manifest, fix_missing_ids, fix_hpk_prefix, fix_comments
 from validators import check_sequence, check_dates, check_means, check_ids
-import apply_hpk_prefix as hpkupload
 
 
 def progress_bar(done, total, label, width=30):
@@ -226,7 +225,6 @@ def process_box():
     exported_count = 0
     error_count = 0
     important_fix_trays = []
-    upload_fix_trays = set()
 
     # --- STEP 4: Process each tray individually ---
     
@@ -353,8 +351,6 @@ def process_box():
                     global_log.write(f"- {tw}\n")
             global_log.write("\n")
             error_count += 1
-            if any("No match" in fl or "Consecution broken" in fl for fl in filtered_lines):
-                upload_fix_trays.add(tray)
         else:
             # Export the tray
             tray_checked_name = f"{tray}_checked"
@@ -432,28 +428,6 @@ def process_box():
         print(f" Saved to: checked/{vendor_folder}/{box}_checked")
     else:
         print(f" No trays exported. Log saved to: output/global_validation_log.md")
-
-    # --- STEP 9.5: Auto-apply upload fix to trays with missing-row errors ---
-    if upload_fix_trays and total_trays > 0:
-        print(f"\n Auto-applying upload fix to {len(upload_fix_trays)} error tray(s)...")
-        gl_path = os.path.join(dest_path, "global_validation_log.md")
-        with open(gl_path, "a", encoding="utf-8") as gl:
-            gl.write(f"## Upload Fix\n\n")
-            for tray in sorted(upload_fix_trays):
-                tray_checked_name = f"{tray}_checked"
-                tray_path = os.path.join(dest_path, tray_checked_name)
-                source = hpkupload.find_upload_source(tray_path, batch=True)
-                if source:
-                    hpkupload.replace_with_upload(tray_path, source)
-                    hpkupload.apply_hpk_prefix(tray_path)
-                    msg = f"Replaced from `{source}`"
-                    print(f"  [OK] {tray_checked_name}: {msg}")
-                    gl.write(f"- **{tray_checked_name}**: {msg}\n")
-                else:
-                    msg = "no upload source found in checked_boxes"
-                    print(f"  [SKIP] {tray_checked_name}: {msg}")
-                    gl.write(f"- **{tray_checked_name}**: {msg}\n")
-            gl.write("\n")
 
     if total_trays > 0:
         copy_to_remote(dest_path, vendor_folder)
