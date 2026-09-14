@@ -25,13 +25,3 @@ TEST_BOX_ID = "Gra16"
 
 # Institution (e.g. '(99) University of Granada & CAFPE')
 INSTITUTION = "(99) University of Granada & CAFPE"
-
-# --- REMOTE SSH SETTINGS (optional) ---
-# If SSH_REMOTE_HOST is empty or None, remote upload is skipped
-# and everything stays local in checked/<vendor>/.
-# DO NOT share passwords by email/git. Each laboratory uses its own.
-SSH_REMOTE_HOST = ""
-SSH_REMOTE_PORT = 22
-SSH_USERNAME = ""
-SSH_PASSWORD = ""
-SSH_REMOTE_PATH = "/home/MassiveTestMeasures/checked"

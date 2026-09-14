@@ -33,8 +33,8 @@ INSTITUTION = "(99) University of Granada & CAFPE"
 Notes:
 
 - `VENDOR_BOX_NUMBER` must match the folder you put in `input/`. If you set `16`, `input/Box16` must exist.
-- Leave `SSH_REMOTE_HOST = ""` if you do not want remote upload (usual case). Everything stays local.
-- Never commit `config.py` to git or send it by email if it contains a password.
+- Everything stays local in `checked/<VENDOR>/`.
+- Never commit `config.py` to git.
 
 ## 4. Normal use (each batch)
 
@@ -75,4 +75,3 @@ A zip of the code without those folders and without `config.py` is enough. The r
 | `No Box folder found in 'input/'` | Folder name must be exact: `input/Box05` (capital B). |
 | `No Box folder found for number 16` | Number in `config.py` does not match folder in `input/`. Make them equal. |
 | `ModuleNotFoundError: pandas...` | Missing dependencies. Run `pip install -r requirements.txt`. |
-| `Remote copy FAILED` | Normal if you do not use SSH. Leave `SSH_REMOTE_HOST = ""`. |

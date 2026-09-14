@@ -4,100 +4,11 @@ import shutil
 import io
 import re
 import zipfile
-import paramiko
 import pandas as pd
 
-from config import VENDOR_DELIVERY_ID, SSH_REMOTE_HOST, SSH_REMOTE_PORT, SSH_USERNAME, SSH_PASSWORD, SSH_REMOTE_PATH
+from config import VENDOR_DELIVERY_ID
 from fixes import fix_noise_floats, fix_daq_errors, fix_empty_cells, fix_missing_iv_rows, fix_manifest, fix_missing_ids, fix_hpk_prefix, fix_comments
 from validators import check_sequence, check_dates, check_means, check_ids
-
-
-def progress_bar(done, total, label, width=30):
-    """Draw an in-place progress bar: [====>    ] 52% (1023/1965)"""
-    pct = done * 100 // total if total else 100
-    filled = int(width * done / total) if total else width
-    bar = "=" * filled
-    if filled < width:
-        bar = bar[:-1] + ">" + " " * (width - filled)
-    sys.stdout.write(f"\r   {label}: [{bar}] {pct:3d}% ({done}/{total})")
-    sys.stdout.flush()
-    if done == total:
-        sys.stdout.write("\n")
-
-
-def copy_to_remote(local_path, vendor_folder):
-    """Zip the checked folder and upload the zip to remote."""
-    if not SSH_REMOTE_HOST:
-        return False
-    try:
-        import zipfile
-
-        folder_name = os.path.basename(local_path)
-        zip_path = local_path + ".zip"
-
-        file_list = []
-        for root, dirs, files in os.walk(local_path):
-            for file in files:
-                file_list.append(os.path.join(root, file))
-
-        total = len(file_list)
-        print(f"\n   Zipping {total} files from {folder_name}...")
-        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_STORED) as zf:
-            for i, file_path in enumerate(file_list):
-                arcname = os.path.relpath(file_path, local_path)
-                zf.write(file_path, arcname)
-                if (i + 1) % 50 == 0 or (i + 1) == total:
-                    progress_bar(i + 1, total, "Zipping")
-        zip_size_mb = os.path.getsize(zip_path) / (1024 * 1024)
-        print(f"   Zip done: {zip_size_mb:.1f} MB")
-
-        print(f"   Connecting to {SSH_REMOTE_HOST}...")
-        import socket
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(30)
-        sock.connect((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
-        transport = paramiko.Transport(sock)
-        transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD)
-        sftp = paramiko.SFTPClient.from_transport(transport)
-
-        remote_base = f"{SSH_REMOTE_PATH}/{vendor_folder}"
-        remote_zip = f"{remote_base}/{folder_name}.zip"
-
-        try:
-            sftp.stat(remote_base)
-        except FileNotFoundError:
-            sftp.mkdir(remote_base)
-
-        try:
-            sftp.remove(remote_zip)
-        except FileNotFoundError:
-            pass
-
-        upload_done = [False]
-
-        def progress_cb(transferred, _total):
-            if _total == 0:
-                return
-            mb_done = int(transferred / (1024 * 1024))
-            mb_total = int(zip_size_mb)
-            if mb_done >= mb_total:
-                if upload_done[0]:
-                    return
-                upload_done[0] = True
-            progress_bar(mb_done, mb_total, "Upload")
-
-        print(f"   Uploading {folder_name}.zip ({zip_size_mb:.1f} MB)...")
-        sftp.put(zip_path, remote_zip, callback=progress_cb)
-        sftp.close()
-        transport.close()
-
-        os.remove(zip_path)
-
-        print(f"   Remote copy: {folder_name}.zip -> {SSH_REMOTE_HOST}:{remote_zip}")
-        return True
-    except Exception as e:
-        print(f" Remote copy FAILED: {e}")
-        return False
 
 
 def process_box():
@@ -428,9 +339,6 @@ def process_box():
         print(f" Saved to: checked/{vendor_folder}/{box}_checked")
     else:
         print(f" No trays exported. Log saved to: output/global_validation_log.md")
-
-    if total_trays > 0:
-        copy_to_remote(dest_path, vendor_folder)
 
     print(f"==================================================")
 
