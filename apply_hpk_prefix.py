@@ -7,7 +7,17 @@ import pandas as pd
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import VENDOR, VENDOR_DELIVERY_ID, VENDOR_BOX_NUMBER
 
-CHECKED_BOXES_DIR = r"C:\Users\Ferna\Desktop\database\checked_boxes"
+try:
+    from config import CHECKED_BOXES_DIR as _CFG_CHECKED_BOXES
+except ImportError:
+    _CFG_CHECKED_BOXES = None
+
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CHECKED_BOXES_DIR = (
+    os.environ.get("SIPM_CHECKED_BOXES")
+    or _CFG_CHECKED_BOXES
+    or os.path.join(_BASE_DIR, "referencia")
+)
 
 DEST_TO_UPLOAD_FOLDER = {
     "CIEMAT": "Box_subidas_CIEMAT",

@@ -1,26 +1,31 @@
 # SiPM Data Tools
 
-Herramienta profesional unificada para la validación y corrección de datos crudos de SiPM antes de subirlos a la base de datos de DUNE.
+Unified tool for validating and fixing raw SiPM data before uploading it to the DUNE database.
 
-## 📂 Estructura
+> **New in another laboratory:** read **`LAB_INSTRUCTIONS.md`** first.
 
-- `main.py`: Ejecutable principal automatizado.
-- `input/`: Carpeta donde debes arrastrar tus `Box##` originales.
-- `output/`: Carpeta donde aparecerán tus datos listos, renombrados a `Box##_checked` junto con un archivo log con los reportes.
-- `config.py`: Archivo de configuración global (aquí puedes cambiar el fabricante, el envío o el Box ID para la validación de manifiestos).
-- `validators/`: Librería interna con los scripts de validación (escritos en inglés).
-- `fixes/`: Librería interna con los scripts de corrección automática (escritos en inglés).
+## Quick install
 
-## 🚀 Cómo usarlo
+```bash
+pip install -r requirements.txt
+copy config.example.py config.py   # on Linux/Mac: cp config.example.py config.py
+```
 
-1. **Configurar los metadatos**: Abre `config.py` y ajusta `MANUFACTURER`, `DELIVERY_ID`, y `TEST_BOX_ID` si hace falta para el nuevo lote de datos a revisar.
-2. **Coloca los datos**: Arrastra o copia las carpetas originales enteras (ej. `Box05`, `Box12`) dentro de la carpeta **`input/`**.
-3. **Procesar**: Haz doble clic en `main.py` o ejecuta el siguiente comando en la terminal:
-   ```bash
-   python main.py
-   ```
-4. **Revisar resultados**: 
-   - Ve a la carpeta **`output/`**.
-   - Allí encontrarás el archivo **`global_validation_log.txt`**. Ábrelo: solo contendrá los errores reales o las modificaciones ("fixes") que ha hecho.
-   - Si no hay reportes de error para una caja, significa que está perfecta.
-   - Encontrarás tus cajas listas y parcheadas con el nombre `Box05_checked`. Esa es la carpeta que debes subir a la base de datos de DUNE.
+On Windows you can also use `install.bat` and then `run.bat`.
+
+## Usage
+
+1. Edit `config.py` (`VENDOR`, `VENDOR_DELIVERY_ID`, `VENDOR_BOX_NUMBER`, `TEST_BOX_ID`, `INSTITUTION`).
+2. Copy the original folder (e.g. `Box16`) into `input/`.
+3. Run `python main.py`.
+4. Collect the result from `checked/<VENDOR>/Box##_checked/` (`Tray******_checked` + `global_validation_log.md`).
+
+## Structure
+
+- `main.py`: main executable.
+- `auto.py`: alternative entry point (same processing as `main.py`).
+- `verify.py`: verifies a processed Box (`python verify.py fbk Box05`).
+- `apply_hpk_prefix.py`: manual replacement from `referencia/` + HPK/SMB prefixes.
+- `config.example.py`: template (copy to `config.py`, which is never shared).
+- `fixes/`, `validators/`: fixes and validators.
+- `input/`, `output/`, `checked/`, `referencia/`: local data (never sent).

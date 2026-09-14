@@ -13,23 +13,6 @@ from validators import check_sequence, check_dates, check_means, check_ids
 import apply_hpk_prefix as hpkupload
 
 
-def sftp_put_file(sftp, local_path, remote_path):
-    """Upload a single file, creating remote dirs if needed."""
-    remote_dir = os.path.dirname(remote_path)
-    try:
-        sftp.stat(remote_dir)
-    except FileNotFoundError:
-        parts = remote_dir.replace("\\", "/").split("/")
-        cumulative = ""
-        for p in parts:
-            cumulative += "/" + p
-            try:
-                sftp.stat(cumulative)
-            except FileNotFoundError:
-                sftp.mkdir(cumulative)
-    sftp.put(local_path, remote_path)
-
-
 def progress_bar(done, total, label, width=30):
     """Draw an in-place progress bar: [====>    ] 52% (1023/1965)"""
     pct = done * 100 // total if total else 100
@@ -116,165 +99,6 @@ def copy_to_remote(local_path, vendor_folder):
     except Exception as e:
         print(f" Remote copy FAILED: {e}")
         return False
-
-
-def update_summary(script_dir, box, vendor_folder, tray_results, tray_comments=None):
-    """Create or update checked/summary.xlsx with Detalle sheet.
-
-    Preserves all existing columns (e.g. manual Comments) and formatting.
-    Only updates Status for the processed trays and appends new rows.
-    Optionally writes Comments for specific trays via tray_comments dict.
-    """
-    if tray_comments is None:
-        tray_comments = {}
-    from openpyxl import load_workbook, Workbook
-    from openpyxl.styles import PatternFill, Font, Alignment
-    from openpyxl.utils import get_column_letter
-
-    summary_path = os.path.join(script_dir, 'checked', 'summary.xlsx')
-    box_num = int(box[3:])
-
-    fills = {
-        "checked": PatternFill(start_color="C6EFCE", end_color="C6EFCE", fill_type="solid"),
-        "warning": PatternFill(start_color="FFEB9C", end_color="FFEB9C", fill_type="solid"),
-        "error":   PatternFill(start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"),
-        "upload":  PatternFill(start_color="BDD7EE", end_color="BDD7EE", fill_type="solid"),
-    }
-    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    header_font = Font(color="FFFFFF", bold=True)
-    center = Alignment(horizontal="center")
-
-    os.makedirs(os.path.dirname(summary_path), exist_ok=True)
-
-    # ── Create fresh if not exists ─────────────────────────────────
-    if not os.path.exists(summary_path):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Detalle"
-        headers = ["Vendor", "Box", "Tray", "Status"]
-        for c_idx, h in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=c_idx, value=h)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = center
-        for c_idx in range(1, len(headers) + 1):
-            ws.column_dimensions[get_column_letter(c_idx)].width = 20
-        wb.save(summary_path)
-
-    # ── Read existing workbook ─────────────────────────────────────
-    wb = load_workbook(summary_path)
-    ws = wb["Detalle"]
-    all_cols = {}
-    for c_idx in range(1, ws.max_column + 1):
-        all_cols[ws.cell(row=1, column=c_idx).value] = c_idx
-
-    # Ensure standard headers exist
-    standard = ["Vendor", "Box", "Tray", "Status", "Comments"]
-    for h in standard:
-        if h not in all_cols:
-            c_idx = ws.max_column + 1
-            cell = ws.cell(row=1, column=c_idx, value=h)
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = center
-            all_cols[h] = c_idx
-
-    # ── Read existing data, skip blank rows ──────────────────────────
-    rows = []
-    for row_idx in range(2, ws.max_row + 1):
-        row_data = {}
-        for h, c_idx in all_cols.items():
-            row_data[h] = ws.cell(row=row_idx, column=c_idx).value
-        v = row_data.get("Vendor")
-        b = row_data.get("Box")
-        t = row_data.get("Tray")
-        if (v is None or str(v).strip() == "") and (b is None or str(b).strip() == "") and (t is None or str(t).strip() == ""):
-            continue
-        rows.append(row_data)
-
-    # ── Update or append ───────────────────────────────────────────
-    new_tray_data = {}
-    for tray, status in tray_results.items():
-        tray_short = int(tray.replace("Tray", "").lstrip("0") or "0")
-        new_tray_data[(vendor_folder, box_num, tray_short)] = status
-
-    existing_keys = set()
-    for rd in rows:
-        key = (rd.get("Vendor"), rd.get("Box"), rd.get("Tray"))
-        existing_keys.add(key)
-
-    for key, status in new_tray_data.items():
-        vendor, box_num_t, tray_short = key
-        comment = tray_comments.get(key, None)
-        if key in existing_keys:
-            # Update Status (unless "upload")
-            for rd in rows:
-                if (rd.get("Vendor"), rd.get("Box"), rd.get("Tray")) == key:
-                    if rd.get("Status") != "upload":
-                        rd["Status"] = status
-                    if comment is not None:
-                        rd["Comments"] = comment
-                    break
-        else:
-            new_row = {"Vendor": vendor, "Box": box_num_t, "Tray": tray_short, "Status": status}
-            if comment is not None:
-                new_row["Comments"] = comment
-            for h in all_cols:
-                if h not in new_row:
-                    new_row[h] = None
-            rows.append(new_row)
-            existing_keys.add(key)
-
-    # ── Sort by Vendor, Box, Tray ──────────────────────────────────
-    def sort_key(rd):
-        v = rd.get("Vendor") or ""
-        b = rd.get("Box") or 0
-        t = rd.get("Tray") or 0
-        try:
-            b = int(b)
-        except (ValueError, TypeError):
-            b = 0
-        try:
-            t = int(t)
-        except (ValueError, TypeError):
-            t = 0
-        return (str(v), b, t)
-
-    rows.sort(key=sort_key)
-
-    # ── Write all data back preserving all columns ─────────────────
-    existing_cols = list(all_cols.keys())
-    # Delete all data rows (keep header)
-    for row_idx in range(ws.max_row, 1, -1):
-        ws.delete_rows(row_idx)
-
-    for r_idx, rd in enumerate(rows, 2):
-        for h in existing_cols:
-            val = rd.get(h)
-            c_idx = all_cols[h]
-            cell = ws.cell(row=r_idx, column=c_idx, value=val)
-            cell.alignment = center
-
-    # ── Apply Status colouring ─────────────────────────────────────
-    status_col_idx = all_cols.get("Status")
-    for row_idx in range(2, ws.max_row + 1):
-        if status_col_idx:
-            val = str(ws.cell(row=row_idx, column=status_col_idx).value or "")
-            if val in fills:
-                ws.cell(row=row_idx, column=status_col_idx).fill = fills[val]
-
-    # ── Auto-adjust column widths ──────────────────────────────────
-    for c_idx in range(1, ws.max_column + 1):
-        max_len = 0
-        col_letter = get_column_letter(c_idx)
-        for row_idx in range(1, ws.max_row + 1):
-            val = ws.cell(row=row_idx, column=c_idx).value
-            if val is not None:
-                max_len = max(max_len, len(str(val)))
-        ws.column_dimensions[col_letter].width = max_len + 3
-
-    wb.save(summary_path)
-    return summary_path
 
 
 def process_box():
@@ -401,7 +225,6 @@ def process_box():
     exported_count = 0
     error_count = 0
     important_fix_trays = []
-    tray_results = {}
     upload_fix_trays = set()
 
     # --- STEP 4: Process each tray individually ---
@@ -528,7 +351,6 @@ def process_box():
                 for tw in date_warnings:
                     global_log.write(f"- {tw}\n")
             global_log.write("\n")
-            tray_results[tray] = "error"
             error_count += 1
             if any("No match" in fl or "Consecution broken" in fl for fl in filtered_lines):
                 upload_fix_trays.add(tray)
@@ -562,7 +384,6 @@ def process_box():
                     global_log.write(f"- {tw}\n")
                 global_log.write("\n")
 
-            tray_results[tray] = "warning" if tray in important_fix_trays else "checked"
             exported_count += 1
 
         # Clean sandbox
@@ -612,7 +433,6 @@ def process_box():
         print(f" No trays exported. Log saved to: output/global_validation_log.md")
 
     # --- STEP 9.5: Auto-apply upload fix to trays with missing-row errors ---
-    tray_comments = {}
     if upload_fix_trays and total_trays > 0:
         print(f"\n Auto-applying upload fix to {len(upload_fix_trays)} error tray(s)...")
         gl_path = os.path.join(dest_path, "global_validation_log.md")
@@ -628,37 +448,14 @@ def process_box():
                     msg = f"Replaced from `{source}`"
                     print(f"  [OK] {tray_checked_name}: {msg}")
                     gl.write(f"- **{tray_checked_name}**: {msg}\n")
-                    tray_results[tray] = "warning"
-                    tray_short = int(tray.replace("Tray", "").lstrip("0") or "0")
-                    tray_comments[(vendor_folder, int(box[3:]), tray_short)] = "ruben"
                 else:
                     msg = "no upload source found in checked_boxes"
                     print(f"  [SKIP] {tray_checked_name}: {msg}")
                     gl.write(f"- **{tray_checked_name}**: {msg}\n")
             gl.write("\n")
 
-    # --- STEP 10: Update summary.xlsx ---
-    remote_ok = copy_to_remote(dest_path, vendor_folder) if total_trays > 0 else False
-    summary_path = update_summary(script_dir, box, vendor_folder, tray_results, tray_comments)
-    print(f" Summary: checked/summary.xlsx")
-
-    # --- STEP 11: Sync summary.xlsx to remote ---
-    if SSH_REMOTE_HOST and summary_path:
-        try:
-            import socket
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(30)
-            sock.connect((SSH_REMOTE_HOST, SSH_REMOTE_PORT))
-            transport = paramiko.Transport(sock)
-            transport.connect(username=SSH_USERNAME, password=SSH_PASSWORD)
-            sftp = paramiko.SFTPClient.from_transport(transport)
-            remote_summary = f"{SSH_REMOTE_PATH}/summary.xlsx"
-            sftp_put_file(sftp, summary_path, remote_summary)
-            sftp.close()
-            transport.close()
-            print(f" Remote summary: {SSH_REMOTE_HOST}:{remote_summary}")
-        except Exception as e:
-            print(f" Remote summary FAILED: {e}")
+    if total_trays > 0:
+        copy_to_remote(dest_path, vendor_folder)
 
     print(f"==================================================")
 
