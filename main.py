@@ -111,6 +111,7 @@ def process_box():
     if os.path.exists(output_dir):
         shutil.rmtree(output_dir)
     os.makedirs(output_dir)
+    open(os.path.join(output_dir, '.gitkeep'), 'a').close()
 
     # Find Box folders in input
     box_folders = [f for f in os.listdir(input_dir)
